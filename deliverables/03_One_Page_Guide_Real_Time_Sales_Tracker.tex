@@ -1,0 +1,114 @@
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[scaled=0.92]{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[letterpaper,top=0.40in,bottom=0.38in,left=0.52in,right=0.52in]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{microtype}
+\usepackage[colorlinks=true,urlcolor=holaflyred,linkcolor=ink]{hyperref}
+
+% Official Holafly + Intercom Editorial Palette (DESIGN (1).md)
+\definecolor{ink}{HTML}{111111}
+\definecolor{iron}{HTML}{414141}
+\definecolor{graphite}{HTML}{585858}
+\definecolor{holaflyred}{HTML}{E63946}
+\definecolor{hairline}{HTML}{DEDBD6}
+\definecolor{linen}{HTML}{F1EEE9}
+\definecolor{cream}{HTML}{FAF9F6}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2.2pt}
+\color{ink}
+
+% Section Heading Style (Ink + Warm Hairline)
+\titleformat{\section}
+  {\fontsize{9.6}{11.2}\selectfont\bfseries\color{ink}}
+  {\thesection.}{0.45em}{}
+  [\vspace{1pt}{\color{hairline}\titlerule[0.6pt]}]
+\titlespacing*{\section}{0pt}{6pt}{3pt}
+
+\newcommand{\eyebrow}[1]{{\fontfamily{pcr}\selectfont\fontsize{7.2}{8.5}\selectfont\color{graphite}\MakeUppercase{#1}}}
+\newcommand{\code}[1]{{\fontfamily{pcr}\selectfont\footnotesize\color{ink}#1}}
+\newcommand{\hbullet}{\textcolor{holaflyred}{\rule[0.45ex]{0.40ex}{0.40ex}}}
+
+\begin{document}
+\fontsize{8.35}{10.5}\selectfont
+
+% Holafly Editorial Header (Clean Warm Print Hierarchy)
+\eyebrow{Holafly Conversational Commerce \textperiodcentered\ Real-Time Operations \textperiodcentered\ Deliverable 3 of 4}\\[1.5pt]
+{\fontsize{14.8}{17}\selectfont\bfseries\color{ink}Real-Time Sales Tracker — One-Page Operational Guide}\\[2.5pt]
+{\color{holaflyred}\rule{1.40in}{1.8pt}}{\color{hairline}\rule{\dimexpr\textwidth-1.40in\relax}{0.6pt}}\\[2.5pt]
+{\fontsize{7.9}{9.4}\selectfont\color{iron}%
+\textbf{Author:} Gabriel Andr\'es Salazar Espinosa \quad|\quad
+\textbf{Live App:} \href{https://holafly-realtime-sales-tracker.streamlit.app/}{\code{holafly-realtime-sales-tracker.streamlit.app}} \quad|\quad
+\textbf{SLA:} $\leq 10$m (Actual: 1--3m)}
+
+\section{Architecture \& How Auto-Refresh Meets the $\leq 10$-Minute Target}
+\textbf{Why legacy Looker Studio lags 3--5 hours:} Reporting stacks three bottlenecks---multi-hour batch ETL syncs from checkout/Intercom, scheduled full-table BigQuery rebuilds, and Looker Studio's default 12-hour data freshness cache.
+\begin{itemize}[leftmargin=1.15em, itemsep=1.4pt, topsep=1.5pt, label=\hbullet]
+  \item \textbf{MVP Streaming Architecture (1--3 min end-to-end latency):} A deterministic Python generator (\code{src/mock\_generator.py}) ingests realistic eSIM micro-batches every \textbf{2 minutes} into an ACID SQLite WAL store (\code{raw\_orders}). ANSI SQL window views (\code{sql/views.sql}) clean and deduplicate every row in $<15$\,ms, and the Streamlit cockpit (\code{app.py}) auto-refreshes every \textbf{60 seconds} via \code{@st.fragment(run\_every="60s")}.
+  \item \textbf{24/7 Cloud Autonomy (Local PC Off):} Hosted on Streamlit Community Cloud using deterministic UTC time-bucket seeding (\code{BASE\_SEED + floor(epoch/120)}). On every 60s heartbeat or evaluator load, the app creates/syncs the SQLite stream up to \code{UTC NOW()} in $<200$\,ms without any local process.
+  \item \textbf{Production Mapping at Holafly:} Replace mock ingestion with \textbf{Checkout/Intercom Webhooks $\rightarrow$ Pub/Sub $\rightarrow$ BigQuery Storage Write API (Streaming Inserts)}, execute the exact 4-gate SQL inside an \textbf{Incremental BigQuery Materialized View} scanning only the trailing 24h partition ($<5$\,MB/run), and serve via \textbf{BI Engine / Looker Studio} or a \textbf{Cloud Run} tactical cockpit.
+\end{itemize}
+
+\section{How Each Operational Role Uses the Tracker During a Shift}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{1.16in} >{\raggedright\arraybackslash}p{1.42in} >{\raggedright\arraybackslash}X@{}}
+\toprule
+\rowcolor{linen}
+\textbf{\color{ink}Role / Persona} & \textbf{\color{ink}Primary View} & \textbf{\color{ink}Real-Time Shift Decisions \& Actions Supported} \\
+\midrule
+\textbf{\color{ink}Sales Managers} &
+Sales Manager View &
+Monitor \textbf{Net Revenue, Valid Orders, AOV, Discount Penetration \%, and Revenue/Shift Hour}. Read the live \textbf{Anomaly Banner} comparing the latest 30m window against the trailing 3h baseline ($Z$-score and $\%$ delta) to spot mid-shift drops (\textbf{CRITICAL DROP $\leq -35\%$}, \textbf{WARNING $\leq -20\%$}) or \textbf{FLASH20 SURGE ($\geq +35\%$)} within minutes. \\
+\rowcolor{cream}
+\textbf{\color{ink}Coordinators (WFM)} &
+Coordinator View (Workforce \& Capacity) &
+Inspect the \textbf{Market $\times$ Language Capacity Matrix} benchmarked at \textbf{3.50 orders/agent-hr}. Reallocate bilingual agents in real time from \textbf{UNDER-UTILIZED ($<70\%$)} queues into \textbf{OVERLOADED ($\geq 115\%$)} or \textbf{DROP ALERT} segments, backed by the Agent $\times$ Shift coverage table. \\
+\textbf{\color{ink}Agents \& Team Leads} &
+Agent View (Leaderboard \& Feed) &
+Track individual shift pacing (\textbf{Orders, Revenue, AOV, Discount \%, Pace vs.\ Shift Avg \%}: \textit{TOP CLOSER $\geq +15\%$}, \textit{ON PACE}, \textit{NEEDS COACHING $\leq -15\%$}) plus the live feed of the latest 25 confirmed valid sales. \\
+\bottomrule
+\end{tabularx}
+
+\section{``What Counts as a Sale?'' --- Formal 4-Gate SQL Data Quality Standard}
+Every incoming event in \code{raw\_orders} passes four sequential SQL classification gates (\code{v\_classified\_orders} $\rightarrow$ \code{v\_valid\_sales}). Rejected payloads remain fully transparent in the top \textbf{Pipeline Telemetry Strip} and the \textbf{Data Quality \& SQL Audit} tab:
+
+\vspace{1pt}
+\renewcommand{\arraystretch}{1.10}
+\begin{tabularx}{\textwidth}{@{}l l >{\raggedright\arraybackslash}X@{}}
+\toprule
+\rowcolor{linen}
+\textbf{\color{ink}Gate} & \textbf{\color{ink}Audit Status} & \textbf{\color{ink}Exact Acceptance / Exclusion Rule (SQL)} \\
+\midrule
+\textbf{\color{ink}Gate 1} & \code{MISSING\_DIMENSION} & Rejects null or empty \code{Order ID}, \code{Agent}, or values outside Holafly's 6 markets and 5 languages. \\
+\rowcolor{cream}
+\textbf{\color{ink}Gate 2} & \code{TEST\_EMAIL} & Excludes internal QA/staging accounts (\code{@holafly.internal}, \code{@staging.holafly.com}, \code{@testmail.invalid}, \code{qa.*}, \code{test\_*}, \code{loadtest.*}). \\
+\textbf{\color{ink}Gate 3} & \code{INVALID\_AMOUNT} & Requires strictly $\text{amount\_usd} > \$0.00$ (excludes $\$0$ failed captures and negative refunds/chargebacks; any positive amount is a valid sale, with no arbitrary upper cap so high-value B2B/group bundles count). \\
+\rowcolor{cream}
+\textbf{\color{ink}Gate 4} & \code{DUPLICATE} & Retains only first arrival via \code{ROW\_NUMBER() OVER (PARTITION BY order\_id ORDER BY ingested\_at\_utc ASC, raw\_event\_id ASC) = 1}. \\
+\bottomrule
+\end{tabularx}
+
+\section{Timezone Standard, Interactive Demo Controls \& Known Refresh Limitations}
+\begin{itemize}[leftmargin=1.15em, itemsep=1.4pt, topsep=1.5pt, label=\hbullet]
+  \item \textbf{Timezone \& Midnight-Safe 3-Shift Model:} Stored in ISO-8601 UTC; displayed in \textbf{COT (UTC-5, Medell\'in Hub)} by default (switchable to UTC or CET) across \textbf{Morning (06--14 COT)}, \textbf{Afternoon Peak (14--22 COT)}, and \textbf{Night (22--06 COT)}. All shift boundaries and elapsed-hour calculations use full UTC timestamps so \code{SHIFT\_3\_NIGHT} spans midnight cleanly without splitting pre-midnight records.
+  \item \textbf{False-Alarm Guard \& Interactive Controls:} Alerts require a trailing 3h baseline of $\geq 10$ valid orders/30m to suppress noise on small filtered slices. Evaluators can switch the sidebar \textbf{Operational Scenario Mode} (Default Active Drop, Normal Baseline, Critical Outage, Flash Surge) or click \textbf{Simulate +2m Batch} to verify live ingestion immediately.
+  \item \textbf{Free-Tier Cloud Limitation:} Streamlit Community Cloud free containers sleep after 12+ hours of zero visitors ($\sim$15--25s cold wake-up, followed by $<200$\,ms deterministic database rebuild and catch-up). Deploying on \textbf{Google Cloud Run (\code{min-instances=1})} eliminates cold starts completely in production.
+\end{itemize}
+
+\vfill
+{\color{hairline}\rule{\textwidth}{0.5pt}}\\[2pt]
+{\fontsize{7.5}{9}\selectfont\color{graphite}%
+Holafly Workforce / Sales Ops Data Analyst Technical Assessment \hfill Verified 1-Page Executive Guide (LaTeX / TeX Live 2024)}
+
+\end{document}

@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+*.db-shm
+*.db-wal
+data/sales_tracker.db
+*.mp4
+mvp-assessment.pdf
+DESIGN.md
+DESIGN (1).md
+.DS_Store
+Thumbs.db
+spec.md
